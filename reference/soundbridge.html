@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SoundBridge — English through Chinese</title>
+<style>
+:root{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#182338;background:#f4f7fb}
+*{box-sizing:border-box}body{margin:0;padding:28px 16px}.wrap{max-width:690px;margin:auto}
+header{text-align:center;margin:25px 0 30px}.logo{display:inline-flex;align-items:center;gap:8px;color:#4d5acb;font-weight:800;font-size:18px}.logo span{background:#5866dd;color:white;border-radius:13px;padding:9px}h1{font-size:clamp(30px,7vw,46px);letter-spacing:-1.5px;margin:17px 0 8px}header p,.muted{color:#64738b}
+.panel{background:white;border:1px solid #e6eaf2;border-radius:22px;padding:24px;box-shadow:0 10px 35px #263e6710;margin:18px 0}
+label{font-weight:700;display:block;margin-bottom:12px}textarea{width:100%;min-height:110px;resize:vertical;padding:16px;border:1.5px solid #dce3f0;border-radius:14px;font:inherit;font-size:18px;outline:none}textarea:focus{border-color:#5866dd}
+button{border:0;border-radius:12px;padding:13px 17px;font-weight:700;cursor:pointer;font-size:15px}
+.primary{background:#5866dd;color:white}.secondary{background:#edf0ff;color:#4654c4}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.result{margin-top:18px}.item{border:1px solid #e6eaf2;border-radius:15px;padding:18px;margin-top:12px}.english{font-size:27px;font-weight:800}.sound{font-size:24px;color:#5866dd;margin:9px 0}.meaning{font-size:18px}.ipa{font-size:13px;color:#8190a6;margin-top:8px}.item button{margin-top:14px}
+.hint{font-size:13px;color:#738099;line-height:1.6;margin-top:15px}.examples{display:flex;gap:8px;flex-wrap:wrap}.examples button{background:#f1f4fa;color:#3b4b68;padding:10px 12px}.hidden{display:none}
+footer{text-align:center;color:#8491a4;font-size:13px;padding:15px}
+</style></head>
+<body><main class="wrap">
+<header><div class="logo"><span>文 A</span> SoundBridge</div><h1>English that sounds familiar.</h1><p>Learn English using Chinese sound-alikes, meanings, and real pronunciation.</p></header>
+<section class="panel"><label for="phrase">Enter an English word or phrase</label><textarea id="phrase" placeholder="Try: beautiful, apple, thank you...">beautiful</textarea>
+<div class="actions"><button class="primary" id="learn">Show pronunciation →</button><button class="secondary" id="speakAll">🔊 Listen</button></div>
+<p class="hint">Try an example</p><div class="examples" id="examples"></div></section>
+<section class="panel"><label>Your learning card</label><div id="result" class="result" aria-live="polite"></div><p class="hint">Chinese sound-alikes are approximate memory aids. Listen to the English audio to learn the actual pronunciation.</p></section>
+<footer>Simple offline demo · No account required · Audio uses your device's voices</footer>
+</main>
+<script>
+const words={
+"apple":["艾坡","苹果","/ˈæpəl/"],"beautiful":["比优提否","美丽的","/ˈbjuːtɪfəl/"],
+"thank you":["三克油","谢谢","/ˈθæŋk juː/"],"hello":["哈喽","你好","/həˈloʊ/"],
+"good morning":["古德 莫宁","早上好","/ɡʊd ˈmɔːrnɪŋ/"],"how are you":["好 阿 优","你好吗","/haʊ ɑːr juː/"],
+"water":["沃特","水","/ˈwɔːtər/"],"computer":["康皮优特","电脑","/kəmˈpjuːtər/"],
+"school":["斯库尔","学校","/skuːl/"],"english":["英格利许","英语","/ˈɪŋɡlɪʃ/"],
+"today":["特得诶","今天","/təˈdeɪ/"],"friend":["弗润德","朋友","/frɛnd/"],
+"love":["拉夫","爱","/lʌv/"],"goodbye":["古德拜","再见","/ɡʊdˈbaɪ/"]
+};
+const phrase=document.getElementById("phrase"),result=document.getElementById("result");
+function speak(t){if(!("speechSynthesis" in window)){alert("Audio is not supported by this browser.");return}speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang="en-US";u.rate=.82;speechSynthesis.speak(u)}
+function render(){const raw=phrase.value.trim(),key=raw.toLowerCase().replace(/[!?.,]+$/,"").replace(/\s+/g," ");result.replaceChildren();if(!raw){result.textContent="Enter a word to begin.";return}
+const entry=words[key];if(!entry){const p=document.createElement("p");p.textContent="This phrase isn't in the demo dictionary yet. Try one of the examples below. You can still press Listen to hear it.";p.className="muted";result.append(p);return}
+const card=document.createElement("div");card.className="item";
+for(const [cls,txt] of [["english",raw],["sound",entry[0]],["meaning",entry[1]],["ipa",entry[2]]]){const el=document.createElement("div");el.className=cls;el.textContent=txt;card.append(el)}
+const b=document.createElement("button");b.className="secondary";b.textContent="🔊 Hear pronunciation";b.onclick=()=>speak(raw);card.append(b);result.append(card)}
+for(const word of ["Apple","Beautiful","Thank you","Good morning","How are you","Water"]){const b=document.createElement("button");b.textContent=word;b.onclick=()=>{phrase.value=word;render()};document.getElementById("examples").append(b)}
+document.getElementById("learn").onclick=render;document.getElementById("speakAll").onclick=()=>speak(phrase.value.trim());render();
+</script></body></html>
