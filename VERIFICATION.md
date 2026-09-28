@@ -1,5 +1,12 @@
 # Verification — 2026-09-27
 
+## Upstash removal — current configuration
+
+- Removed all Upstash client calls and production Redis requirements. Caching and usage counters now use bounded instance-local memory in all environments. Cold starts reset them and separate Vercel instances do not share them.
+- Updated production regression tests verify that rate limiting works without any external network/database call and still rejects requests over the local limit.
+- **71 tests passed; production build and TypeScript check passed.** Prior Redis-related notes below describe historical versions and no longer apply.
+- Live NVIDIA generation still requires verification after Vercel deploys this update.
+
 ## Conversation saving, learner memory and NVIDIA configuration
 
 - Final run: **71 tests passed** in 6 files. Production build and its TypeScript check passed.

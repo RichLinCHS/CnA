@@ -1,6 +1,6 @@
 import { inputSchema, outputJsonSchema, validateLearning, type Learning, type Result } from '../schema';
 import { fallback } from '../vocabulary';
-import { boundedEnv, consume, hash, redis, sharedConfigured } from './limits';
+import { boundedEnv, consume, hash } from './limits';
 
 import { ApiError, structuredModel } from './model';
 import { pronunciationPrompt } from '../pronunciation-prompt';
@@ -31,12 +31,6 @@ export async function generate(raw: unknown, client: string): Promise<Result> {
     const key = hash(`${process.env.OPENAI_BASE_URL}|${process.env.OPENAI_MODEL}|${text}`);
     const cached = cache.get(key);
     if (cached && cached.until > Date.now()) return { data: cached.data, source: 'cache' };
-    if (sharedConfigured()) {
-      const shared = await redis(['GET', `sb:v1:cache:${key}`]);
-      if (typeof shared === 'string') {
-        try { return { data: validateLearning(JSON.parse(shared), text), source: 'cache' }; } catch { /* Regenerate corrupt cache. */ }
-      }
-    }
     let pending = inFlight.get(key);
     if (!pending) {
       pending = (async () => {
@@ -44,7 +38,6 @@ export async function generate(raw: unknown, client: string): Promise<Result> {
         const data = await callModel(text);
         if (cache.size >= 200) cache.delete(cache.keys().next().value!);
         cache.set(key, { data, until: Date.now() + 86400000 });
-        if (sharedConfigured()) { try { await redis(['SET', `sb:v1:cache:${key}`, JSON.stringify(data), 'EX', 86400]); } catch { /* Successful learning remains usable if cache storage fails. */ } }
         return data;
       })();
       inFlight.set(key, pending);

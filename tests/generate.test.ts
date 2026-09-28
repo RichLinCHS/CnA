@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-vi.mock('../lib/server/limits', () => ({ consume: vi.fn(async () => true), sharedConfigured: () => false, hash: (s: string) => s, redis: vi.fn(), boundedEnv: (_: string, d: number) => d }));
+vi.mock('../lib/server/limits', () => ({ consume: vi.fn(async () => true), hash: (s: string) => s, boundedEnv: (_: string, d: number) => d }));
 import { consume } from '../lib/server/limits';
 import { clearCache, generate } from '../lib/server/generate';
 import { fallback, vocabulary } from '../lib/vocabulary';

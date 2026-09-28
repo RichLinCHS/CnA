@@ -12,7 +12,7 @@ Three navigation tabs separate the original Pronunciation Generator, AI Tutor, a
 
 `POST /api/chat` accepts `message` (1–1000 characters), `history` (up to 12 alternating user/assistant messages, complete pairs, 3000 characters per message and 18000 total), `category`, `scenario` (1–200 characters), `difficulty`, `mode` (`learn` or `practice`), and `sentenceCount` (1–20). The response is `{data: {kind, explanationChinese, lesson, correction, reply}}`, with unused branches explicitly null. Lessons contain sentence cards and dialogues; roleplay contains a counterpart reply and, after the opening, a correction tied to the student's exact message. Both endpoints share the provider transport, pronunciation policy, card schema, HTTP validation, client rate bucket and global generation budget. Chat is not shared-cached because it is conversation-specific. Chat request bodies are bounded to 100000 bytes, including optional learner profile, past learning requests and conversation goal.
 
-No new environment variables are required. The tutor uses the same server-side key, model, provider URL and production Redis limits described below. Without a key, it explains the configuration requirement; it does not present a scripted conversation as AI. The original generator's fallback examples remain available. Professional and healthcare scenarios are prompted to teach communication, not diagnose, prescribe or invent professional advice; AI output still requires judgment.
+No new environment variables are required. The tutor uses the same server-side key, model, provider URL and per-instance usage limits described below. Without a key, it explains the configuration requirement; it does not present a scripted conversation as AI. The original generator's fallback examples remain available. Professional and healthcare scenarios are prompted to teach communication, not diagnose, prescribe or invent professional advice; AI output still requires judgment.
 
 Local storage keys: `soundbridge:conversations:v2` for the conversation library and profile (the former `soundbridge:chat:v1` session is migrated on first use), and `soundbridge:lessons:v1` for up to 20 saved lessons. Storage is validated before reading and write errors are shown to the user. Lesson/dialogue text is escaped by React. Recent chat context is transmitted only when you send a tutor message.
 
@@ -38,10 +38,8 @@ Open http://localhost:3000. Without an API key, all original examples work, incl
 | `OPENAI_API_KEY` | Server-only provider key; required for arbitrary generation. |
 | `OPENAI_BASE_URL` | Defaults to `https://api.openai.com/v1`. Use the API root of a compatible provider, without `/chat/completions`. HTTPS required in production. |
 | `OPENAI_MODEL` | Defaults to `gpt-4o-mini` for OpenAI, or `deepseek-ai/deepseek-v4.1-flash` for the NVIDIA endpoint when unset. Strict JSON schema is requested and independently validated. |
-| `UPSTASH_REDIS_REST_URL` | Shared Redis REST URL. Required with AI in production/Vercel. |
-| `UPSTASH_REDIS_REST_TOKEN` | Server-only Redis REST token. Required with AI in production/Vercel. |
 | `AI_TIMEOUT_MS` | Default 20000 ms for OpenAI or 45000 ms for NVIDIA when unset; upper bound 45000 ms. |
-| `DAILY_GENERATION_LIMIT` | Default 200 uncached generations per 24-hour window across the deployment; hard maximum 1000. Failed upstream attempts count. |
+| `DAILY_GENERATION_LIMIT` | Default 200 uncached generations per 24-hour window per server instance; hard maximum 1000. Failed upstream attempts count. |
 
 Never prefix secrets with `NEXT_PUBLIC_`. Never commit `.env.local`. No browser requests contain the provider key. Compatible providers must implement Chat Completions strict JSON Schema, not only JSON mode; there is intentionally no unvalidated downgrade. See [official OpenAI structured outputs documentation](https://developers.openai.com/api/docs/guides/structured-outputs).
 
@@ -49,10 +47,10 @@ Never prefix secrets with `NEXT_PUBLIC_`. Never commit `.env.local`. No browser 
 
 1. Push this directory as a Git repository, or select it as the Vercel Root Directory in a larger repository.
 2. Import the repository into Vercel using the Next.js preset. Default build command: `npm run build`.
-3. Create an Upstash Redis database and add its REST URL/token along with the AI variables in Vercel Project Settings → Environment Variables. Set them for the relevant Preview/Production environments.
+3. Add your server-side AI variables in Vercel Project Settings → Environment Variables for the relevant Preview/Production environments. No database service is required.
 4. Deploy, then verify an original example and a new sentence such as `How are you today?`.
 
-No deployment has been created by this project generation. The route uses the Node.js runtime and allows 60 seconds, including provider and Redis operations. A production server without shared limits configured fails closed for AI, while original examples still work. For a local production build (`npm run build` then `npm start`), configure Redis if you want live AI. Development uses bounded in-memory counters when Redis is absent.
+The route uses the Node.js runtime and allows 60 seconds. Both local production builds and Vercel can generate AI responses using only the provider credentials; no Redis service is required.
 
 ## API contract and behavior
 
@@ -68,11 +66,11 @@ Both strict provider schema and independent Zod validation are used. The server 
 
 ## Cost, security and privacy
 
-- 10 requests per client per minute before cache lookup; global daily uncached-generation cap; at most 12000 output tokens per generation; no automatic paid retries.
-- Atomic Redis increments enforce shared limits. On Vercel, client identity uses its platform-overwritten `x-vercel-forwarded-for`; outside Vercel requests share one bucket unless a trusted proxy identity mechanism is implemented. Do not substitute arbitrary client-supplied forwarding headers.
-- Cached AI results expire after 24 hours. A bounded 200-entry process cache supplements Redis; identical in-flight calls on one instance share a provider request. Across instances simultaneous cache misses may cause separate calls, each counted toward the shared budget.
-- Production fails closed when Redis limits cannot be checked. Cache writes are best effort after successful generation. Rate-limit responses use HTTP 429. Public sites may additionally use Vercel Firewall rules and provider-enforced billing/usage limits. The request cap is not a dollar-denominated spend guarantee.
-- Input is sent to the configured AI provider and successful results may be stored in Redis for 24 hours. Cache keys are hashed; cached content itself is not encrypted by this app. Use a private Redis database with appropriate access policies.
+- 10 requests per client per minute before cache lookup; per-instance daily uncached-generation cap; at most 12000 output tokens per generation; no automatic paid retries.
+- In-memory counters enforce limits per server instance. They reset on cold starts and are not shared across Vercel instances. On Vercel, client identity uses the platform-overwritten `x-vercel-forwarded-for`; elsewhere requests share one bucket.
+- A bounded 200-entry in-memory cache retains successful pronunciation responses for up to 24 hours while the instance lives. Identical in-flight requests on one instance are deduplicated. Instances do not share cache entries.
+- Rate-limit responses use HTTP 429. These best-effort limits are not a site-wide or dollar-denominated budget guarantee.
+- Input is sent to the configured AI provider. Cached results stay temporarily in server memory; no external cache is used.
 - Favorites (up to 100) and history (last 20) stay in localStorage on the current browser. Clear history in the UI; remove favorites with Saved. Storage failures show a message. Data is not synced between devices.
 
 ## Audio
@@ -106,9 +104,7 @@ In the connected Vercel project's Settings → Environment Variables, set these 
 | OPENAI_BASE_URL | https://integrate.api.nvidia.com/v1 |
 | OPENAI_MODEL | deepseek-ai/deepseek-v4.1-flash |
 | AI_TIMEOUT_MS | 45000 |
-| UPSTASH_REDIS_REST_URL | Your Redis REST URL |
-| UPSTASH_REDIS_REST_TOKEN | Your Redis REST token |
 
 The OpenAI-prefixed variable names are the app's generic compatible-provider settings. NVIDIA calls use max_tokens rather than max_completion_tokens. Strict json_schema remains enabled, with Zod validation after generation; no silent downgrade to unvalidated output. The exact hosted model's schema support, account access and latency require a live credentialed test. No NVIDIA key or Vercel credentials were supplied during implementation. NVIDIA's [model endpoint reference](https://docs.api.nvidia.com/nim/reference/nvidia-deepseek-v4_1-flash-infer) documents the model ID, URL and max_tokens parameter.
 
-Use the repository root as Vercel's Root Directory and the Next.js preset. The configured Git integration should deploy new main-branch commits automatically; check its deployment log. Public production AI requires the Redis variables above because usage controls fail closed if missing. Never use NEXT_PUBLIC_ for keys or commit secrets. After setting variables, redeploy and test a new sentence and a short tutor lesson.
+Use the repository root as Vercel's Root Directory and the Next.js preset. The configured Git integration should deploy new main-branch commits automatically; check its deployment log. Upstash is no longer required; old Upstash environment variables can be removed. Never use NEXT_PUBLIC_ for keys or commit secrets. After setting variables, redeploy and test a new sentence and a short tutor lesson.
