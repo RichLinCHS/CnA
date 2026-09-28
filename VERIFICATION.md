@@ -1,5 +1,12 @@
 # Verification — 2026-09-27
 
+## Conversation saving, learner memory and NVIDIA configuration
+
+- Final run: **71 tests passed** in 6 files. Production build and its TypeScript check passed.
+- Archive tests cover 40-turn retention, multiple chats/drafts, profile persistence, legacy migration, corruption protection, quota failures, stale-tab conflicts, backup merging and bounded opt-in memory. Backend tests verify that learner goals, past requests and the original conversation goal enter tutor context. NVIDIA transport tests verify the model ID, `max_tokens`, strict schema and malformed-output rejection.
+- Browser checks against an isolated simulated provider confirmed two saved conversations, draft restoration after reload, profile restoration, opening an older chat and continuing it with a correction. These checks do not establish real model personalization quality.
+- NVIDIA hosted schema compatibility and real generation remain unverified without a key. Vercel project status cannot be verified without a project/deployment URL or connected account access. No credentials are stored in the repository.
+
 ## AI Tutor extension — final verification
 
 - `npm test`: **56 tests passed** across 4 test files (all original 26 tests plus 30 tutor tests).

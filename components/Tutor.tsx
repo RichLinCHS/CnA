@@ -2,41 +2,64 @@
 import { useEffect, useRef, useState } from 'react';
 import { categories, scenarioPrompt, topics, type Category } from '../lib/topics';
 import { defaultSettings, validateChat, type ChatRequest, type Lesson, type Settings } from '../lib/chat-schema';
-import { appendTurn, contextMessages, readSession, saveSession, type Turn } from '../lib/chat-storage';
+import { contextMessages } from '../lib/chat-storage';
+import { readLibrary, writeLibrary, learningMemory, newConversation as createConversation, type Library } from '../lib/conversations';
+import ConversationLibrary from './ConversationLibrary';
 import LearningCard from './LearningCard';
 import LessonView, { type CardActions } from './LessonView';
 
 export default function Tutor({ favorites, onSave, onSpeak, onSaveLesson, lessons }: CardActions & { onSaveLesson: (lesson: Lesson) => void; lessons: Lesson[] }) {
-  const [settings, setSettings] = useState<Settings>({ ...defaultSettings });
-  const [turns, setTurns] = useState<Turn[]>([]); const [message, setMessage] = useState('');
-  const [busy, setBusy] = useState(false); const [pending, setPending] = useState(''); const [error, setError] = useState(''); const [storageNote, setStorageNote] = useState('');
-  const active = useRef<AbortController | null>(null); const latest = useRef<HTMLDivElement>(null); const ready = useRef(false);
-  useEffect(() => { try { const saved = readSession(localStorage); setSettings(saved.settings); setTurns(saved.turns); } catch { setStorageNote('Chat storage is unavailable in this browser.'); } ready.current = true; return () => active.current?.abort(); }, []);
-  function persist(nextSettings: Settings, nextTurns: Turn[]) { if (!ready.current) return; try { saveSession(localStorage, nextSettings, nextTurns); } catch { setStorageNote('Chat could not be saved. Browser storage may be full or blocked.'); } }
-  function update(next: Settings) { setSettings(next); persist(next, turns); }
-  function newConversation() { if (busy) return; setTurns([]); setMessage(''); setError(''); persist(settings, []); }
+  const [library, setLibrary] = useState<Library | null>(null);
+  const libraryRef = useRef<Library | null>(null);
+  const [sending, setSending] = useState(false); const [pending, setPending] = useState(''); const [error, setError] = useState(''); const [storageNote, setStorageNote] = useState(''); const [visibleTurns, setVisibleTurns] = useState(12);
+  const active = useRef<AbortController | null>(null); const latest = useRef<HTMLDivElement>(null);
+  const current = library?.conversations.find(c => c.id === library.activeId);
+  const settings = current?.settings ?? defaultSettings; const turns = current?.turns ?? []; const message = current?.draft ?? '';
+  const busy = sending || !library;
+  function commit(next: Library) {
+    try { const saved = writeLibrary(localStorage, next); libraryRef.current = saved; setLibrary(saved); setStorageNote('Saved in this browser.'); return true; }
+    catch (error) { libraryRef.current = next; setLibrary(next); setStorageNote('Not saved: ' + (error instanceof Error ? error.message : 'Browser storage may be full or blocked.')); return false; }
+  }
+  useEffect(() => { try { const saved = readLibrary(localStorage); libraryRef.current = saved; setLibrary(saved); } catch { setStorageNote('Saved conversations could not be loaded. Existing browser data has not been changed. Check browser storage or restore a backup before continuing.'); } return () => active.current?.abort(); }, []);
+  function patchCurrent(patch: Partial<NonNullable<typeof current>>) {
+    const value = libraryRef.current; if (!value) return false;
+    return commit({...value, conversations:value.conversations.map(c => c.id===value.activeId ? {...c,...patch,updatedAt:new Date().toISOString()} : c)});
+  }
+  function setMessage(draft: string) { patchCurrent({draft, ...(!turns.length && draft.trim() ? {title:draft.trim().slice(0,120)} : {})}); }
+  function update(next: Settings) { patchCurrent({settings:next}); }
+  function newConversation() {
+    if (busy || !libraryRef.current) return;
+    const next = createConversation(settings); const value=libraryRef.current;
+    // Empty setup screens are not conversations; never discard a draft or completed turn.
+    const conversations=value.conversations.filter(c => c.turns.length || c.draft.trim());
+    commit({...value,activeId:next.id,conversations:[...conversations,next]}); setError(''); setVisibleTurns(12);
+  }
+  function openConversation(id: string) { if(busy || !libraryRef.current) return; commit({...libraryRef.current,activeId:id}); setError(''); setVisibleTurns(12); }
   async function send(event: React.FormEvent) {
     event.preventDefault(); if (busy) return; const value = message.trim();
     if (!value) { setError('Describe what you want to learn, or write your reply.'); return; }
     // A natural-language practice request can start roleplay without changing a control first.
     const actual = !turns.length && /practice.*(?:with me|english)|pretend|role.?play|角色扮演|和我练习/i.test(value) ? { ...settings, mode: 'practice' as const } : settings;
-    const request: ChatRequest = { ...actual, message: value, history: contextMessages(turns) };
-    setSettings(actual); setBusy(true); setPending(value); setError('');
+    const request: ChatRequest = { ...actual, message: value, history: contextMessages(turns), conversationGoal: turns[0]?.user ?? value, ...(library?.memoryEnabled ? { learner: library.profile, learningMemory: learningMemory(library) } : {}) };
+    if (!patchCurrent({settings:actual, title:turns.length ? current!.title : value.slice(0,120)})) { setError('Please resolve the saving error or export your conversations before sending.'); return; }
+    setSending(true); setPending(value); setError('');
     const controller = new AbortController(); active.current = controller; const timer = setTimeout(() => controller.abort(), 55000);
     try {
       const response = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request), signal: controller.signal });
       const body = await response.json();
       if (!response.ok) throw new Error(typeof body.error === 'string' ? body.error : 'Tutor unavailable. Please try again.');
-      const data = validateChat(body.data, request); const next = appendTurn(turns, value, data);
-      setTurns(next); setMessage(''); persist(actual, next);
+      const data = validateChat(body.data, request); const next = [...turns, {user:value,response:data}];
+      patchCurrent({settings:actual,turns:next,draft:''});
       requestAnimationFrame(() => latest.current?.scrollIntoView({ behavior: 'auto', block: 'start' }));
     } catch (error) { setError(error instanceof Error && error.name === 'AbortError' ? 'The tutor timed out. Your message is kept so you can retry.' : error instanceof Error ? error.message : 'Tutor unavailable. Please try again.'); }
-    finally { clearTimeout(timer); setBusy(false); setPending(''); active.current = null; }
+    finally { clearTimeout(timer); setSending(false); setPending(''); active.current = null; }
   }
   const actions = { favorites, onSave, onSpeak };
   const renderCard = (card: Parameters<typeof onSave>[0]) => <LearningCard card={card} saved={favorites.some(f => f.english.toLowerCase() === card.english.toLowerCase())} onSave={onSave} onSpeak={onSpeak}/>;
   const locked = busy || turns.length > 0;
   return <div>
+    {storageNote && <p role="status" className="notice">{storageNote}</p>}
+    {library && <ConversationLibrary library={library} disabled={busy} onChange={commit} onOpen={openConversation}/>}
     <section className="panel"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="!mb-1">Your everyday English tutor</h2><p className="muted text-sm">实用英语，一起开口练习。</p></div><button className="secondary" disabled={busy} onClick={newConversation}>New conversation</button></div>
       <div className="mt-5 grid gap-4 sm:grid-cols-2"><div><label htmlFor="tutor-mode">Learning mode</label><select id="tutor-mode" className="w-full" value={settings.mode} disabled={locked} onChange={e => update({ ...settings, mode: e.target.value as Settings['mode'] })}><option value="learn">Create a lesson</option><option value="practice">Practice Conversation</option></select></div><div><label htmlFor="difficulty">Difficulty</label><select id="difficulty" className="w-full" disabled={locked} value={settings.difficulty} onChange={e => update({ ...settings, difficulty: e.target.value as Settings['difficulty'] })}>{['Beginner', 'Intermediate', 'Advanced'].map(level => <option key={level}>{level}</option>)}</select></div></div>
       {turns.length > 0 ? <p className="notice">{settings.category} · {settings.scenario} · {settings.difficulty}<br/>Start a new conversation to change the scenario or mode.</p> : <><h3 className="mt-5 mb-3 font-bold">Choose a topic</h3><div className="topic-grid">{categories.map(category => <button key={category} className={settings.category === category ? 'primary' : 'secondary'} aria-pressed={settings.category === category} disabled={busy} onClick={() => { update({ ...settings, category, scenario: topics[category][0] }); setMessage(''); }}>{category}</button>)}</div><label className="mt-5" htmlFor="scenario">Common scenario</label>{settings.category === 'Custom Topic' ? <input id="scenario" maxLength={200} disabled={busy} value={settings.scenario} onChange={e => update({ ...settings, scenario: e.target.value })} placeholder="Describe your situation"/> : <select id="scenario" className="w-full" value={settings.scenario} disabled={busy} onChange={e => { update({ ...settings, scenario: e.target.value }); setMessage(''); }}>{topics[settings.category as Category].map(s => <option key={s}>{s}</option>)}</select>}
@@ -46,9 +69,10 @@ export default function Tutor({ favorites, onSave, onSpeak, onSaveLesson, lesson
     </section>
     <div className="chat-log" aria-label="Tutor conversation" aria-busy={busy}>
       {!turns.length && !busy && <div className="tutor-bubble"><strong>Hi, let’s practice real life.</strong><p lang="zh-Hans" className="mt-2">选择场景，或用中文、英文告诉我你想学什么。练习模式中，我会扮演对话伙伴并解释你的英语表达。</p></div>}
-      {turns.map((turn, i) => <div key={i} ref={i === turns.length - 1 ? latest : undefined}><div className="student-bubble"><span className="speaker">You</span><p>{turn.user}</p></div><div className="tutor-bubble"><p className="speaker">SoundBridge Tutor</p><p lang="zh-Hans" className="my-3">{turn.response.explanationChinese}</p>{turn.response.lesson && <><LessonView lesson={turn.response.lesson} {...actions}/><button className="primary mt-4" disabled={lessons.some(l => JSON.stringify(l) === JSON.stringify(turn.response.lesson))} onClick={() => onSaveLesson(turn.response.lesson!)}>{lessons.some(l => JSON.stringify(l) === JSON.stringify(turn.response.lesson)) ? 'Lesson saved' : 'Save Lesson'}</button></>}{turn.response.correction && <section className="correction"><h3 className="font-bold">Your response · a natural version</h3><p className="hint">You wrote: {turn.response.correction.original}</p><p lang="zh-Hans" className="mt-3">{turn.response.correction.explanationChinese}</p>{renderCard(turn.response.correction.improved)}</section>}{turn.response.reply && <section className="mt-5"><h3 className="font-bold">AI {turn.response.reply.speaker}</h3>{renderCard(turn.response.reply.card)}</section>}</div></div>)}
+      {turns.length > visibleTurns && <button className="secondary mb-4" onClick={() => setVisibleTurns(n => n + 12)}>Show older messages ({turns.length - visibleTurns})</button>}
+      {turns.slice(-visibleTurns).map((turn, i, shown) => <div key={i} ref={i === shown.length - 1 ? latest : undefined}><div className="student-bubble"><span className="speaker">You</span><p>{turn.user}</p></div><div className="tutor-bubble"><p className="speaker">SoundBridge Tutor</p><p lang="zh-Hans" className="my-3">{turn.response.explanationChinese}</p>{turn.response.lesson && <><LessonView lesson={turn.response.lesson} {...actions}/><button className="primary mt-4" disabled={lessons.some(l => JSON.stringify(l) === JSON.stringify(turn.response.lesson))} onClick={() => onSaveLesson(turn.response.lesson!)}>{lessons.some(l => JSON.stringify(l) === JSON.stringify(turn.response.lesson)) ? 'Lesson saved' : 'Save Lesson'}</button></>}{turn.response.correction && <section className="correction"><h3 className="font-bold">Your response · a natural version</h3><p className="hint">You wrote: {turn.response.correction.original}</p><p lang="zh-Hans" className="mt-3">{turn.response.correction.explanationChinese}</p>{renderCard(turn.response.correction.improved)}</section>}{turn.response.reply && <section className="mt-5"><h3 className="font-bold">AI {turn.response.reply.speaker}</h3>{renderCard(turn.response.reply.card)}</section>}</div></div>)}
       {busy && <><div className="student-bubble"><span className="speaker">You</span><p>{pending}</p></div><div className="tutor-bubble" role="status"><span className="typing-dots" aria-hidden="true">● ● ●</span> Tutor is thinking…</div></>}
     </div>
-    <section className="panel"><form onSubmit={send}><label htmlFor="tutor-message">{settings.mode === 'practice' && turns.length ? 'Your reply in English' : 'What would you like to learn?'}</label><textarea id="tutor-message" maxLength={1000} value={message} disabled={busy} onChange={e => setMessage(e.target.value)} placeholder={settings.mode === 'practice' && turns.length ? 'Yes, we have time. What kind of manicure would you like?' : 'Teach me common English conversations for a nail technician.'}/><div className="flex flex-wrap items-center justify-between gap-3 mt-3"><span className="hint !mt-0">{message.length}/1000 · English or 中文</span><button className="primary" disabled={busy || !settings.scenario.trim()}>{busy ? 'Thinking…' : settings.mode === 'practice' && !turns.length ? 'Begin practice →' : 'Send →'}</button></div></form>{error && <p className="notice error" role="alert">{error}</p>}{storageNote && <p className="notice" role="status">{storageNote}</p>}<p className="hint">The latest 12 turns stay in this browser. The tutor receives up to 6 recent turns and your selected scenario. New conversation clears this chat; saved lessons and favorites remain.</p></section>
+    <section className="panel"><form onSubmit={send}><label htmlFor="tutor-message">{settings.mode === 'practice' && turns.length ? 'Your reply in English' : 'What would you like to learn?'}</label><textarea id="tutor-message" maxLength={1000} value={message} disabled={busy} onChange={e => setMessage(e.target.value)} placeholder={settings.mode === 'practice' && turns.length ? 'Yes, we have time. What kind of manicure would you like?' : 'Teach me common English conversations for a nail technician.'}/><div className="flex flex-wrap items-center justify-between gap-3 mt-3"><span className="hint !mt-0">{message.length}/1000 · English or 中文</span><button className="primary" disabled={busy || !settings.scenario.trim()}>{busy ? 'Thinking…' : settings.mode === 'practice' && !turns.length ? 'Begin practice →' : 'Send →'}</button></div></form>{error && <p className="notice error" role="alert">{error}</p>}{storageNote && <p className="notice" role="status">{storageNote}</p>}<p className="hint">Every turn and draft is saved in this browser until its storage is full. The tutor uses up to 6 recent turns, the original goal, and enabled learner memory. New conversation keeps previous chats in Saved conversations.</p></section>
   </div>;
 }

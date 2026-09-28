@@ -3,7 +3,7 @@ import { chatResponseSchema, defaultSettings, lessonSchema, settingsSchema, summ
 import type { StorageLike } from './storage';
 export const CHAT_KEY = 'soundbridge:chat:v1';
 export const LESSONS_KEY = 'soundbridge:lessons:v1';
-const turnSchema = z.object({ user: z.string().min(1).max(1000), response: chatResponseSchema }).strict();
+export const turnSchema = z.object({ user: z.string().min(1).max(1000), response: chatResponseSchema }).strict();
 const sessionSchema = z.object({ settings: settingsSchema, turns: z.array(turnSchema).max(12) }).strict();
 export type Turn = z.infer<typeof turnSchema>;
 export type Session = z.infer<typeof sessionSchema>;

@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import { cardSchema } from './schema';
 import { categories } from './topics';
+import { learnerSchema, memorySchema } from './learner';
 const chinese = z.string().min(1).max(1200).regex(/[\u3400-\u9fff]/);
 export const settingsSchema = z.object({ category: z.enum(categories), scenario: z.string().trim().min(1).max(200), difficulty: z.enum(['Beginner', 'Intermediate', 'Advanced']), mode: z.enum(['learn', 'practice']), sentenceCount: z.number().int().min(1).max(20) }).strict();
 export const messageSchema = z.object({ role: z.enum(['user', 'assistant']), content: z.string().trim().min(1).max(3000) }).strict();
-export const chatRequestSchema = settingsSchema.extend({ message: z.string().max(1000).trim().min(1), history: z.array(messageSchema).max(12) }).strict().superRefine((data, ctx) => {
+export const chatRequestSchema = settingsSchema.extend({ message: z.string().max(1000).trim().min(1), history: z.array(messageSchema).max(12), learner: learnerSchema.optional(), learningMemory: memorySchema.optional(), conversationGoal: z.string().max(1000).optional() }).strict().superRefine((data, ctx) => {
   if (data.history.length % 2 || data.history.some((m, i) => m.role !== (i % 2 ? 'assistant' : 'user'))) ctx.addIssue({ code: 'custom', message: 'History must contain complete user/assistant turn pairs.' });
   if (data.history.reduce((n, m) => n + m.content.length, 0) > 18000) ctx.addIssue({ code: 'custom', message: 'Conversation context is too long.' });
 });
