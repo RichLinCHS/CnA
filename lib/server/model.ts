@@ -6,6 +6,10 @@ export async function structuredModel<T>(name: string, schema: object, messages:
     const base = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
     const url = new URL(`${base.replace(/\/$/, '')}/chat/completions`);
     const nvidia = url.hostname === 'integrate.api.nvidia.com';
+    // Keep Chinese-content checks in Zod. NVIDIA's grammar compiler can treat
+    // substring patterns as whole values or stall on broad Unicode alternatives.
+    const providerSchema = nvidia ? JSON.parse(JSON.stringify(schema, (key, value) =>
+      key === 'pattern' && typeof value === 'string' && value.includes('u3400') ? undefined : value)) : schema;
     const configuredModel = process.env.OPENAI_MODEL?.trim();
     const model = nvidia && (!configuredModel || configuredModel === 'nemotron-3-super-120b-a12b')
       ? 'nvidia/nemotron-3-super-120b-a12b' : configuredModel || 'gpt-4o-mini';
@@ -13,7 +17,7 @@ export async function structuredModel<T>(name: string, schema: object, messages:
     const response = await fetch(url, {
       method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(boundedEnv('AI_TIMEOUT_MS', nvidia ? 45000 : 20000, 45000)),
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-      body: JSON.stringify({ model, ...(nvidia ? { max_tokens: 12000 } : { max_completion_tokens: 12000 }), ...(nvidia && model === 'nvidia/nemotron-3-super-120b-a12b' ? { reasoning_effort: 'none' } : {}), stream: false, messages, response_format: { type: 'json_schema', json_schema: { name, strict: true, schema } } }),
+      body: JSON.stringify({ model, ...(nvidia ? { max_tokens: 12000 } : { max_completion_tokens: 12000 }), ...(nvidia && model === 'nvidia/nemotron-3-super-120b-a12b' ? { reasoning_effort: 'none' } : {}), stream: false, messages, response_format: { type: 'json_schema', json_schema: { name, strict: true, schema: providerSchema } } }),
     });
     if (!response.ok) {
       // Never return provider bodies: they may contain credentials or user content.
