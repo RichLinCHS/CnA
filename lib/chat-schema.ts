@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { cardSchema } from './schema';
 import { categories } from './topics';
 import { learnerSchema, memorySchema } from './learner';
-const chinese = z.string().min(1).max(1200).regex(/[\u3400-\u9fff]/);
+const chinese = z.string().min(1).max(1200).regex(/^[\s\S]*[\u3400-\u9fff][\s\S]*$/);
 export const settingsSchema = z.object({ category: z.enum(categories), scenario: z.string().trim().min(1).max(200), difficulty: z.enum(['Beginner', 'Intermediate', 'Advanced']), mode: z.enum(['learn', 'practice']), sentenceCount: z.number().int().min(1).max(20) }).strict();
 export const messageSchema = z.object({ role: z.enum(['user', 'assistant']), content: z.string().trim().min(1).max(3000) }).strict();
 export const chatRequestSchema = settingsSchema.extend({ message: z.string().max(1000).trim().min(1), history: z.array(messageSchema).max(12), learner: learnerSchema.optional(), learningMemory: memorySchema.optional(), conversationGoal: z.string().max(1000).optional() }).strict().superRefine((data, ctx) => {

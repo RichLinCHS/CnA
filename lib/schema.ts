@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const inputSchema = z.object({ text: z.string().max(300, 'Use at most 300 characters.').trim().min(1, 'Enter an English word or sentence.').refine(t => /[A-Za-z]/.test(t), 'Include an English word.') }).strict();
-const chinese = z.string().min(1).max(1200).regex(/[\u3400-\u9fff]/, 'Expected Chinese characters');
+const chinese = z.string().min(1).max(1200).regex(/^[\s\S]*[\u3400-\u9fff][\s\S]*$/, 'Expected Chinese characters');
 export const cardSchema = z.object({ english: z.string().min(1).max(300), soundAlike: chinese, translation: chinese, ipa: z.string().min(3).max(1200).regex(/^\/[^/]+\/$/), limitations: z.array(z.string().min(1).max(400)).min(1).max(8) }).strict();
 export const learningSchema = z.object({ originalText: z.string().min(1).max(300), sentence: cardSchema, words: z.array(cardSchema).min(1).max(150) }).strict();
 export type Card = z.infer<typeof cardSchema>;
