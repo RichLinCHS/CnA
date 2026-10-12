@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { cardSchema } from './schema';
+import { cardSchema, validatePronunciation } from './schema';
 import { categories } from './topics';
 import { learnerSchema, memorySchema } from './learner';
 const chinese = z.string().min(1).max(1200).regex(/^[\s\S]*[\u3400-\u9fff][\s\S]*$/);
@@ -29,6 +29,10 @@ export function lessonCounts(message: string, defaultCount: number) {
 }
 export function validateChat(value: unknown, request: ChatRequest): ChatResponse {
   const data = chatResponseSchema.parse(value);
+  data.lesson?.sentences.forEach(validatePronunciation);
+  data.lesson?.dialogues.forEach(d => d.exchanges.forEach(e => validatePronunciation(e.card)));
+  if (data.reply) validatePronunciation(data.reply.card);
+  if (data.correction) validatePronunciation(data.correction.improved);
   if (request.mode === 'learn') {
     const counts = lessonCounts(request.message, request.sentenceCount);
     if (data.kind !== 'lesson' || !data.lesson || data.reply || data.correction || data.lesson.sentences.length !== counts.sentences || data.lesson.dialogues.length !== counts.dialogues) throw new Error('Lesson shape or count mismatch');
