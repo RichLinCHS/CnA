@@ -37,7 +37,7 @@ Open http://localhost:3000. Without an API key, all original examples work, incl
 | --- | --- |
 | `OPENAI_API_KEY` | Server-only provider key; required for arbitrary generation. |
 | `OPENAI_BASE_URL` | Defaults to `https://api.openai.com/v1`. Use the API root of a compatible provider, without `/chat/completions`. HTTPS required in production. |
-| `OPENAI_MODEL` | Defaults to `gpt-4o-mini` for OpenAI, or `deepseek-ai/deepseek-v4.1-flash` for the NVIDIA endpoint when unset. Strict JSON schema is requested and independently validated. |
+| `OPENAI_MODEL` | Defaults to `gpt-4o-mini` for OpenAI, or `nvidia/nemotron-3-super-120b-a12b` for the NVIDIA endpoint when unset. Strict JSON schema is requested and independently validated. |
 | `AI_TIMEOUT_MS` | Default 20000 ms for OpenAI or 45000 ms for NVIDIA when unset; upper bound 45000 ms. |
 | `DAILY_GENERATION_LIMIT` | Default 200 uncached generations per 24-hour window per server instance; hard maximum 1000. Failed upstream attempts count. |
 
@@ -94,7 +94,7 @@ Every completed turn and draft is auto-saved in the browser. New conversation ke
 
 What the tutor remembers contains editable goals, situation and preferences, a personalization switch, and the exact past learning requests used as interests. Each conversation can be excluded. Enabled memory sends the profile and up to five other chats' opening requests; it never infers personal facts from roleplay replies. Recent context is bounded to six turn pairs while the original conversation goal is retained separately. The legacy session's available turns migrate without deleting its original storage key; turns already discarded by the old version cannot be recovered. Data stays local and is not synced across devices or from localhost to your Vercel domain. Export/import can move it between browsers or domains. Revision checks reject stale writes from another tab.
 
-## NVIDIA DeepSeek V4.1 on Vercel
+## NVIDIA Nemotron 3 Super on Vercel
 
 In the connected Vercel project's Settings → Environment Variables, set these server-only values for Production (and Preview if wanted), then redeploy:
 
@@ -102,9 +102,9 @@ In the connected Vercel project's Settings → Environment Variables, set these 
 | --- | --- |
 | OPENAI_API_KEY | Your NVIDIA API key, entered privately in Vercel |
 | OPENAI_BASE_URL | https://integrate.api.nvidia.com/v1 |
-| OPENAI_MODEL | deepseek-ai/deepseek-v4.1-flash |
+| OPENAI_MODEL | nvidia/nemotron-3-super-120b-a12b |
 | AI_TIMEOUT_MS | 45000 |
 
-The OpenAI-prefixed variable names are the app's generic compatible-provider settings. NVIDIA calls use max_tokens rather than max_completion_tokens. Strict json_schema remains enabled, with Zod validation after generation; no silent downgrade to unvalidated output. The exact hosted model's schema support, account access and latency require a live credentialed test. No NVIDIA key or Vercel credentials were supplied during implementation. NVIDIA's [model endpoint reference](https://docs.api.nvidia.com/nim/reference/nvidia-deepseek-v4_1-flash-infer) documents the model ID, URL and max_tokens parameter.
+The OpenAI-prefixed variable names are the app's generic compatible-provider settings. NVIDIA calls use max_tokens rather than max_completion_tokens. Strict json_schema remains enabled, with Zod validation after generation; no silent downgrade to unvalidated output. The exact hosted model's schema support, account access and latency require a live credentialed test. No NVIDIA key or Vercel credentials were supplied during implementation. NVIDIA's [model endpoint reference](https://docs.api.nvidia.com/nim/reference/nvidia-nemotron-3-super-120b-a12b-infer) documents the model ID, URL and max_tokens parameter.
 
 Use the repository root as Vercel's Root Directory and the Next.js preset. The configured Git integration should deploy new main-branch commits automatically; check its deployment log. Upstash is no longer required; old Upstash environment variables can be removed. Never use NEXT_PUBLIC_ for keys or commit secrets. After setting variables, redeploy and test a new sentence and a short tutor lesson.

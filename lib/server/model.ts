@@ -6,13 +6,27 @@ export async function structuredModel<T>(name: string, schema: object, messages:
     const base = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
     const url = new URL(`${base.replace(/\/$/, '')}/chat/completions`);
     const nvidia = url.hostname === 'integrate.api.nvidia.com';
+    const configuredModel = process.env.OPENAI_MODEL?.trim();
+    const model = nvidia && (!configuredModel || configuredModel === 'nemotron-3-super-120b-a12b')
+      ? 'nvidia/nemotron-3-super-120b-a12b' : configuredModel || 'gpt-4o-mini';
     if (url.protocol !== 'https:' && !(process.env.NODE_ENV !== 'production' && ['localhost', '127.0.0.1'].includes(url.hostname))) throw new ApiError(503, 'AI provider configuration is unavailable.');
     const response = await fetch(url, {
       method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(boundedEnv('AI_TIMEOUT_MS', nvidia ? 45000 : 20000, 45000)),
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-      body: JSON.stringify({ model: process.env.OPENAI_MODEL || (nvidia ? 'deepseek-ai/deepseek-v4.1-flash' : 'gpt-4o-mini'), ...(nvidia ? { max_tokens: 12000 } : { max_completion_tokens: 12000 }), stream: false, messages, response_format: { type: 'json_schema', json_schema: { name, strict: true, schema } } }),
+      body: JSON.stringify({ model, ...(nvidia ? { max_tokens: 12000 } : { max_completion_tokens: 12000 }), ...(nvidia && model === 'nvidia/nemotron-3-super-120b-a12b' ? { reasoning_effort: 'none' } : {}), stream: false, messages, response_format: { type: 'json_schema', json_schema: { name, strict: true, schema } } }),
     });
-    if (!response.ok) throw new ApiError(502, 'AI is unavailable. Please try again later.');
+    if (!response.ok) {
+      // Never return provider bodies: they may contain credentials or user content.
+      const explanations: Record<number, string> = {
+        401: 'The AI provider rejected the API key. Check OPENAI_API_KEY in Vercel and redeploy.',
+        403: 'The AI provider denied access. Check that the key has access to the configured model.',
+        404: 'The AI model or endpoint was not found. Check OPENAI_MODEL and OPENAI_BASE_URL in Vercel and redeploy.',
+        400: 'The AI provider rejected the request format. Check model support for structured JSON output.',
+        422: 'The AI provider rejected the request format. Check model support for structured JSON output.',
+        429: 'The AI provider usage limit was reached. Check provider quota or try again later.',
+      };
+      throw new ApiError(502, explanations[response.status] || `The AI provider returned HTTP ${response.status}. Please try again later.`);
+    }
     const envelope = await response.json(); const choice = envelope.choices?.[0];
     if (choice?.finish_reason !== 'stop' || choice.message?.refusal || typeof choice.message?.content !== 'string') throw new ApiError(502, 'The AI returned an incomplete response. Please try again.');
     return validate(JSON.parse(choice.message.content));
