@@ -25,7 +25,7 @@ export default function SoundBridge() {
     update(); speechSynthesis.addEventListener('voiceschanged', update);
     return () => { speechSynthesis.removeEventListener('voiceschanged', update); speechSynthesis.cancel(); active.current?.abort(); };
   }, []);
-  function speak(value: string) {
+  function speak(value: string, playbackRate = rate) {
     if (!value.trim()) return;
     if (!('speechSynthesis' in window)) { setAudioNote('This browser does not support speech audio. Try Safari, Chrome, or Edge on a device with English voices.'); return; }
     const available = speechSynthesis.getVoices(); if (available.length) voices.current = available;
@@ -33,7 +33,7 @@ export default function SoundBridge() {
     const english = american ?? voices.current.find(v => /^en([-_]|$)/i.test(v.lang));
     if (!english) { setAudioNote('No English voice is available yet. Enable or download an English voice in your device’s speech settings, then try again.'); return; }
     speechSynthesis.cancel(); const speech = new SpeechSynthesisUtterance(value);
-    speech.voice = english; speech.lang = 'en-US'; speech.rate = rate; utterance.current = speech;
+    speech.voice = english; speech.lang = 'en-US'; speech.rate = playbackRate; utterance.current = speech;
     setAudioNote(american ? '' : 'Using an available English voice; its accent may differ from American English.');
     speech.onerror = event => { if (!['interrupted', 'canceled'].includes(event.error)) setAudioNote('Audio could not play. Check your device’s speech settings and try again.'); };
     speechSynthesis.speak(speech);
