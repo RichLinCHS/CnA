@@ -8,6 +8,7 @@ import { readFavorites, readHistory, saveHistory, toggleFavorite, HISTORY_KEY } 
 import Dictation from './Dictation';
 import LearningCard from './LearningCard';
 import Account from './Account';
+import Flashcards from './Flashcards';
 import Tutor from './Tutor';
 import LessonView from './LessonView';
 import { readLessons, saveLesson } from '../lib/chat-storage';
@@ -17,6 +18,7 @@ export default function SoundBridge() { return <InstructionProvider><SoundBridge
 function SoundBridgeContent() {
   const { t, language } = useInstructions();
   const [tab, setTab] = useState('generator');
+  const [study,setStudy]=useState(false);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [inputLanguage, setInputLanguage] = useState<'en' | 'zh'>('en');
   const [text, setText] = useState('beautiful');
@@ -83,7 +85,8 @@ function SoundBridgeContent() {
     {storageNote && <p role="status" className="notice">{storageNote}</p>}
     <div hidden={tab !== 'vocabulary'}>
     <section className="panel"><h2>{t("Conversations & learning goals","对话与学习目标")}</h2><p className="muted text-sm">Reopen a saved chat or update what the tutor remembers about your learning goals.</p><button className="secondary mt-4" onClick={() => { setTab('tutor'); window.scrollTo({top:0}); }}>{t("Review saved conversations →","查看已保存的对话 →")}</button></section>
-    <section className="panel"><h2>Favorite words & phrases <span className="muted font-normal">({favorites.length})</span></h2>{favorites.length ? favorites.map((card, i) => renderCard(card, `favorite-${i}`)) : <p className="muted text-sm">Tap ☆ Save on a card to keep it here.</p>}</section>
+    <div className="actions"><button className={study?'secondary':'primary'} onClick={()=>setStudy(false)}>{t('List view','列表')}</button><button className={study?'primary':'secondary'} onClick={()=>setStudy(true)}>{t('Study flashcards','闪卡学习')}</button></div>
+    {study?<Flashcards key={JSON.stringify(favorites)} cards={favorites} favorites={favorites} onSave={save} onSpeak={speak}/>:<section className="panel"><h2>Favorite words & phrases <span className="muted font-normal">({favorites.length})</span></h2>{favorites.length ? favorites.map((card, i) => renderCard(card, `favorite-${i}`)) : <p className="muted text-sm">Tap ☆ Save on a card to keep it here.</p>}</section>}
     <section className="panel"><div className="flex items-center justify-between"><h2 className="!mb-0">{t("Learning history","学习历史")}</h2>{history.length > 0 && <button className="secondary" onClick={() => { try { localStorage.setItem(HISTORY_KEY, '[]'); setHistory([]); } catch { setStorageNote('Could not clear browser history.'); } }}>{t("Clear","清空")}</button>}</div>{history.length ? <ul className="mt-3 space-y-2">{history.map((data, i) => <li key={i}><button disabled={busy} className="w-full bg-slate-50 text-left" onClick={() => { setTab('generator'); setInputLanguage(/[\u3400-\u9fff]/.test(data.originalText) ? 'zh' : 'en'); setText(data.originalText); setResult({ data, source: 'history', notice: 'Restored from your saved learning history.' }); setError(''); }}>{data.originalText}<span className="muted ml-2 text-sm" lang="zh-Hans">{data.sentence.translation}</span></button></li>)}</ul> : <p className="muted mt-3 text-sm">Your last 20 learning cards will appear here.</p>}</section>
     <section className="panel"><h2>Saved lessons ({lessons.length})</h2>{lessons.length ? lessons.map((lesson, i) => <details key={i} className="saved-lesson"><summary>{lesson.title} · {lesson.sentences.length} sentences</summary><div className="mt-4"><LessonView lesson={lesson} favorites={favorites} onSave={save} onSpeak={speak}/></div></details>) : <p className="muted text-sm">Choose Save Lesson in the tutor to review a lesson here.</p>}</section>
     </div>
