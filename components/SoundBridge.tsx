@@ -1,5 +1,6 @@
 'use client';
 import { InstructionProvider, InstructionToggle, useInstructions } from './Instructions';
+import { chooseVoice, type AudioLanguage } from '../lib/audio';
 import { useEffect, useRef, useState } from 'react';
 import { type Card, type Result, type Learning, validateLearning } from '../lib/schema';
 import { fallback, vocabulary } from '../lib/vocabulary';
@@ -31,16 +32,15 @@ function SoundBridgeContent() {
     update(); speechSynthesis.addEventListener('voiceschanged', update);
     return () => { speechSynthesis.removeEventListener('voiceschanged', update); speechSynthesis.cancel(); active.current?.abort(); };
   }, []);
-  function speak(value: string, playbackRate = rate) {
+  function speak(value: string, playbackRate = rate, audioLanguage: AudioLanguage = 'en-US') {
     if (!value.trim()) return;
     if (!('speechSynthesis' in window)) { setAudioNote('This browser does not support speech audio. Try Safari, Chrome, or Edge on a device with English voices.'); return; }
     const available = speechSynthesis.getVoices(); if (available.length) voices.current = available;
-    const american = voices.current.find(v => /^en[-_]US$/i.test(v.lang));
-    const english = american ?? voices.current.find(v => /^en([-_]|$)/i.test(v.lang));
-    if (!english) { setAudioNote('No English voice is available yet. Enable or download an English voice in your device’s speech settings, then try again.'); return; }
+    const voice = chooseVoice(voices.current, audioLanguage);
+    if (!voice) { setAudioNote(audioLanguage === 'zh-CN' ? t('No Mandarin voice is available. Enable or download a Mandarin Chinese voice in your device’s speech settings, then try again.','没有可用的普通话语音。请在设备语音设置中启用或下载普通话语音后重试。') : t('No English voice is available. Enable or download an English voice in your device’s speech settings, then try again.','没有可用的英语语音。请在设备语音设置中启用或下载英语语音后重试。')); return; }
     speechSynthesis.cancel(); const speech = new SpeechSynthesisUtterance(value);
-    speech.voice = english; speech.lang = 'en-US'; speech.rate = playbackRate; utterance.current = speech;
-    setAudioNote(american ? '' : 'Using an available English voice; its accent may differ from American English.');
+    speech.voice = voice; speech.lang = audioLanguage; speech.rate = playbackRate; utterance.current = speech;
+    setAudioNote(audioLanguage === 'en-US' && !/^en[-_]US$/i.test(voice.lang) ? 'Using an available English voice; its accent may differ from American English.' : '');
     speech.onerror = event => { if (!['interrupted', 'canceled'].includes(event.error)) setAudioNote('Audio could not play. Check your device’s speech settings and try again.'); };
     speechSynthesis.speak(speech);
   }

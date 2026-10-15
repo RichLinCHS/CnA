@@ -1,8 +1,9 @@
 import { useInstructions } from './Instructions';
+import type { Speak } from '../lib/audio';
 import type { Card } from '../lib/schema';
 import type { Lesson } from '../lib/chat-schema';
 import LearningCard from './LearningCard';
-export type CardActions = { favorites: Card[]; onSave: (card: Card) => void; onSpeak: (text: string, rate?: number) => void };
+export type CardActions = { favorites: Card[]; onSave: (card: Card) => void; onSpeak: Speak };
 export default function LessonView({ lesson, favorites, onSave, onSpeak }: CardActions & { lesson: Lesson }) {
   const { t, language } = useInstructions();
   const card = (value: Card, key: string) => <LearningCard key={key} card={value} saved={favorites.some(f => f.english.toLowerCase() === value.english.toLowerCase())} onSave={onSave} onSpeak={onSpeak}/>;
