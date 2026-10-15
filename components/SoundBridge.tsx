@@ -6,6 +6,7 @@ import { fallback, vocabulary } from '../lib/vocabulary';
 import { readFavorites, readHistory, saveHistory, toggleFavorite, HISTORY_KEY } from '../lib/storage';
 import Dictation from './Dictation';
 import LearningCard from './LearningCard';
+import Account from './Account';
 import Tutor from './Tutor';
 import LessonView from './LessonView';
 import { readLessons, saveLesson } from '../lib/chat-storage';
@@ -67,7 +68,7 @@ function SoundBridgeContent() {
   function example(value: string) { setInputLanguage('en'); const data = fallback(value)!; setText(value); setError(''); setResult({ data, source: 'fallback', notice: 'Original example vocabulary. Generate for an AI learning card.' }); remember(data); }
   const renderCard = (card: Card, key: string) => <LearningCard key={key} card={card} saved={favorites.some(f => f.english.toLowerCase() === card.english.toLowerCase())} onSave={save} onSpeak={speak} />;
   return <main className="wrap">
-    <header><div className="logo"><span>文 A</span> SoundBridge</div><h1>{t("English that sounds familiar.","用熟悉的中文谐音学英语。")}</h1><p>{t("Learn English using Chinese sound-alikes, meanings, and real pronunciation.","通过中文谐音、释义和英语原声学习。")}</p><InstructionToggle/></header>
+    <header><div className="logo"><span>文 A</span> SoundBridge</div><h1>{t("English that sounds familiar.","用熟悉的中文谐音学英语。")}</h1><p>{t("Learn English using Chinese sound-alikes, meanings, and real pronunciation.","通过中文谐音、释义和英语原声学习。")}</p><InstructionToggle/></header><Account/>
     <nav className="main-tabs" aria-label="Main navigation">{[['generator','Pronunciation Generator'],['tutor','AI Tutor'],['vocabulary','My Vocabulary']].map(([id, label]) => <button key={id} aria-current={tab === id ? 'page' : undefined} className={tab === id ? 'primary' : 'secondary'} onClick={() => setTab(id)}>{t(label, id === 'generator' ? '发音生成器' : id === 'tutor' ? 'AI 老师' : '我的词库')}</button>)}</nav>
     <div className="audio-toolbar">      <div className="mt-5 flex flex-wrap items-center gap-3"><label htmlFor="speed" className="!mb-0 text-sm">{t("Audio speed","播放速度")}</label><select id="speed" value={rate} onChange={e => setRate(Number(e.target.value))}><option value={0.7}>{t("Slow · 0.7×","慢速 · 0.7×")}</option><option value={1}>{t("Normal · 1.0×","正常 · 1.0×")}</option><option value={1.2}>{t("Fast · 1.2×","快速 · 1.2×")}</option></select></div>
       {audioNote && <p role="status" className="notice">{audioNote}</p>}</div>
