@@ -1,0 +1,6 @@
+import { expect, it } from 'vitest';
+import { sessionStore, REMEMBER_KEY } from '../lib/auth-storage';
+function memory(){const m=new Map<string,string>();return {getItem:(k:string)=>m.get(k)??null,setItem:(k:string,v:string)=>{m.set(k,v);},removeItem:(k:string)=>{m.delete(k);}};}
+it('persists remembered sessions across adapter recreation',()=>{const local=memory(),session=memory();local.setItem(REMEMBER_KEY,'yes');sessionStore(local,session).setItem('token','session-token');expect(sessionStore(local,memory()).getItem('token')).toBe('session-token');expect(session.getItem('token')).toBeNull();});
+it('keeps unremembered sessions only for the current tab',()=>{const local=memory(),session=memory();const adapter=sessionStore(local,session);adapter.setItem('token','session-token');expect(adapter.getItem('token')).toBe('session-token');expect(sessionStore(local,memory()).getItem('token')).toBeNull();expect(local.getItem('token')).toBeNull();});
+it('clears both stores on logout and removes stale copies on write',()=>{const local=memory(),session=memory();local.setItem('token','old');const adapter=sessionStore(local,session);adapter.setItem('token','new');expect(local.getItem('token')).toBeNull();local.setItem('token','old');adapter.removeItem('token');expect(local.getItem('token')).toBeNull();expect(session.getItem('token')).toBeNull();});
