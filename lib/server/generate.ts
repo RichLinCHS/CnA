@@ -1,3 +1,4 @@
+import { alignPronunciation } from '../aligned-pronunciation';
 import { inputSchema, outputJsonSchema, validateLearning, type Learning, type Result } from '../schema';
 import { fallback } from '../vocabulary';
 import { boundedEnv, consume, hash } from './limits';
@@ -15,7 +16,7 @@ const unavailable = 'AI generation is unavailable. Please try again later or cho
 
 async function callModel(text: string, inputLanguage: 'en' | 'zh'): Promise<Learning> {
   const { tokens } = await import('../schema');
-  return structuredModel('soundbridge_learning', outputJsonSchema, [{ role: 'system', content: prompt + (inputLanguage === 'zh' ? '\nThe input is Chinese. Translate it into natural everyday American English in sentence.english. Preserve the Chinese input in originalText. All pronunciation and IPA must cover the translated English. words must tokenize the translated English in order. The sentence translation must express the full meaning in Simplified Chinese.' : '') }, { role: 'user', content: JSON.stringify({ text, ...(inputLanguage === 'en' ? { wordTokens: tokens(text) } : {}) }) }], value => validateLearning(value, text, inputLanguage));
+  return structuredModel('soundbridge_learning', outputJsonSchema, [{ role: 'system', content: prompt + (inputLanguage === 'zh' ? '\nThe input is Chinese. Translate it into natural everyday American English in sentence.english. Preserve the Chinese input in originalText. All pronunciation and IPA must cover the translated English. words must tokenize the translated English in order. The sentence translation must express the full meaning in Simplified Chinese.' : '') }, { role: 'user', content: JSON.stringify({ text, ...(inputLanguage === 'en' ? { wordTokens: tokens(text) } : {}) }) }], value => alignPronunciation(validateLearning(value, text, inputLanguage)));
 }
 export async function generate(raw: unknown, client: string): Promise<Result> {
   const parsed = inputSchema.safeParse(raw);
