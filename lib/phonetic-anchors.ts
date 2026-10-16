@@ -4,5 +4,5 @@ const anchors:Record<string,string>={"i'm":'艾姆',not:'纳特',in:'因',tomorr
 export function anchorCard(card:Card):Card {
  const words=tokens(card.english).map(w=>w.toLowerCase().replaceAll('’',"'"));
  if(!words.length||!words.every(w=>anchors[w]))return card;
- return {...card,soundAlike:words.map(w=>anchors[w]).join(' ')};
+ return {...card,soundAlike:words.map(w=>anchors[w]).join(' '),limitations:['汉字是近似记忆提示，不能准确表示英语元音和词尾辅音；不要把每个汉字都读成完整音节，请跟读英语音频。']};
 }
