@@ -9,3 +9,4 @@ it('rejects translated prose copied into the sound-alike field', () => {
 it('allows short legitimate overlaps such as hi', () => {
  expect(() => validatePronunciation({...fallback('how are you')!.sentence,english:'Hi!',translation:'嗨',soundAlike:'嗨'})).not.toThrow();
 });
+it('rejects non-Mandarin kana mixed into sound-alikes',()=>{expect(()=>validatePronunciation({...fallback('hello')!.sentence,english:'appointment',soundAlike:'艾 ポイン 特 メント'})).toThrow('Japanese kana');});

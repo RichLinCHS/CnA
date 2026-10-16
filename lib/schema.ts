@@ -4,6 +4,7 @@ export const inputSchema = z.object({ text: z.string().max(300, 'Use at most 300
 const chinese = z.string().min(1).max(1200).regex(/^[\s\S]*[\u3400-\u9fff][\s\S]*$/, 'Expected Chinese characters');
 export const cardSchema = z.object({ english: z.string().min(1).max(300), soundAlike: chinese, translation: chinese, ipa: z.string().min(3).max(1200).regex(/^\/[^/]+\/$/), limitations: z.array(z.string().min(1).max(400)).min(1).max(8) }).strict();
 export function validatePronunciation(card: Card): void {
+  if (/[\u3040-\u30ff]/u.test(card.soundAlike)) throw new Error('Sound-alike must use Chinese characters, not Japanese kana.');
   const normalize = (value: string) => value.replace(/[\s\p{P}\p{S}]/gu, '').toLowerCase();
   // Short interjections and loanwords can legitimately share pronunciation and meaning.
   if (tokens(card.english).length >= 3 && normalize(card.soundAlike) === normalize(card.translation)) {
