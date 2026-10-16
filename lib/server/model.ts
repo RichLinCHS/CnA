@@ -16,8 +16,10 @@ export async function structuredModel<T>(name: string, schema: object, messages:
     if (url.protocol !== 'https:' && !(process.env.NODE_ENV !== 'production' && ['localhost', '127.0.0.1'].includes(url.hostname))) throw new ApiError(503, 'AI provider configuration is unavailable.');
 
     // Determine timeouts and retry policy via envs with safe bounds.
-    // totalTimeoutMs should be less than the serverless function maxDuration (keep a buffer)
-    const totalTimeoutMs = boundedEnv('AI_TIMEOUT_MS', nvidia ? 90000 : 30000, 290000);
+    // Use a code-level default of 240s and cap at 295s to avoid exceeding hobby plan limits
+    const defaultMs = nvidia ? 90000 : 240000;
+    const capMs = 295000;
+    const totalTimeoutMs = Math.min(boundedEnv('AI_TIMEOUT_MS', defaultMs, capMs), capMs);
     const maxAttempts = Math.max(1, boundedEnv('AI_FETCH_RETRIES', 2, 5));
     const baseDelayMs = boundedEnv('AI_RETRY_BASE_MS', 1000, 10000);
 
