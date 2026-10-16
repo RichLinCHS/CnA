@@ -56,7 +56,7 @@ function SoundBridgeContent() {
     const value = text.trim(); if (!value) { setError('Enter an English word or sentence.'); return; }
     if (text.length > 300) { setError('Use at most 300 characters.'); return; }
     setBusy(true); setError(''); const controller = new AbortController(); active.current = controller;
-    const timer = setTimeout(() => controller.abort(), 55000);
+    const timer = setTimeout(() => controller.abort(), 100000);
     try {
       const response = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, inputLanguage }), signal: controller.signal });
       const body = await response.json();

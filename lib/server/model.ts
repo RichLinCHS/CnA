@@ -15,7 +15,7 @@ export async function structuredModel<T>(name: string, schema: object, messages:
       ? 'nvidia/nemotron-3-super-120b-a12b' : configuredModel || 'gpt-4o-mini';
     if (url.protocol !== 'https:' && !(process.env.NODE_ENV !== 'production' && ['localhost', '127.0.0.1'].includes(url.hostname))) throw new ApiError(503, 'AI provider configuration is unavailable.');
     const response = await fetch(url, {
-      method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(boundedEnv('AI_TIMEOUT_MS', nvidia ? 45000 : 20000, 45000)),
+      method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(boundedEnv('AI_TIMEOUT_MS', nvidia ? 90000 : 30000, 90000)),
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
       body: JSON.stringify({ model, ...(nvidia ? { max_tokens: 12000 } : { max_completion_tokens: 12000 }), ...(nvidia && model === 'nvidia/nemotron-3-super-120b-a12b' ? { reasoning_effort: 'none' } : {}), stream: false, messages, response_format: { type: 'json_schema', json_schema: { name, strict: true, schema: providerSchema } } }),
     });

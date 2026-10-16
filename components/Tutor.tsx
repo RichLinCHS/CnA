@@ -48,7 +48,7 @@ export default function Tutor({ favorites, onSave, onSpeak, onSaveLesson, lesson
     const request: ChatRequest = { ...actual, instructionLanguage: language, message: value, history: contextMessages(turns), conversationGoal: turns[0]?.user ?? value, ...(library?.memoryEnabled ? { learner: library.profile, learningMemory: learningMemory(library) } : {}) };
     if (!patchCurrent({settings:actual, title:turns.length ? current!.title : value.slice(0,120)})) { setError('Please resolve the saving error or export your conversations before sending.'); return; }
     setSending(true); setPending(value); setError('');
-    const controller = new AbortController(); active.current = controller; const timer = setTimeout(() => controller.abort(), 55000);
+    const controller = new AbortController(); active.current = controller; const timer = setTimeout(() => controller.abort(), 100000);
     try {
       const response = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request), signal: controller.signal });
       const body = await response.json();
