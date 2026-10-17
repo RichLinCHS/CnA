@@ -1,9 +1,11 @@
 'use client';
+import {anchorCard} from '../lib/phonetic-anchors';
 import { useInstructions } from './Instructions';
 import { useId, useState } from 'react';
 import type { Speak } from '../lib/audio';
 import type { Card } from '../lib/schema';
-export default function LearningCard({ card, saved, onSave, onSpeak }: { card: Card; saved: boolean; onSave: (card: Card) => void; onSpeak: Speak }) {
+export default function LearningCard({ card: originalCard, saved, onSave, onSpeak }: { card: Card; saved: boolean; onSave: (card: Card) => void; onSpeak: Speak }) {
+  const card=anchorCard(originalCard);
   const { t, language } = useInstructions();
   const [rate, setRate] = useState(1);
   const speedId = useId();
