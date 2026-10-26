@@ -1,7 +1,7 @@
 import { boundedEnv } from './limits';
 export class ApiError extends Error { constructor(public status: number, message: string) { super(message); } }
 export type ModelMessage = { role: 'system' | 'user' | 'assistant'; content: string };
-export async function structuredModel<T>(name: string, schema: object, messages: ModelMessage[], validate: (data: unknown) => T): Promise<T> {
+export async function structuredModel<T>(name: string, schema: object, messages: ModelMessage[], validate: (data: unknown) => T, repair?: {signal:AbortSignal}): Promise<T> {
   try {
     const base = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
     const url = new URL(`${base.replace(/\/$/, '')}/chat/completions`);
@@ -18,7 +18,7 @@ export async function structuredModel<T>(name: string, schema: object, messages:
     if (url.protocol !== 'https:' && !(process.env.NODE_ENV !== 'production' && ['localhost', '127.0.0.1'].includes(url.hostname))) throw new ApiError(503, 'AI provider configuration is unavailable.');
     // One deadline covers fetch, body parsing and any quick transient retry.
     // Never restart a slow generation after dividing the deadline into attempts.
-    const signal = AbortSignal.timeout(boundedEnv('AI_TIMEOUT_MS', nvidia ? 90000 : 30000, 90000));
+    const signal = repair?.signal ?? AbortSignal.timeout(boundedEnv('AI_TIMEOUT_MS', nvidia ? 90000 : 30000, 90000));
     const started = Date.now();
     const attempts = boundedEnv('AI_FETCH_RETRIES', 2, 2);
     let response!: Response;
@@ -56,7 +56,14 @@ export async function structuredModel<T>(name: string, schema: object, messages:
     try {return validate(parsed);} catch(error) {
       const issues=(error as {issues?:{code:string;path:(string|number)[]}[]})?.issues;
       const fields=issues?.slice(0,5).map(issue=>({code:issue.code,path:issue.path.filter(p=>typeof p==='number'||/^(english|soundAlike|translation|ipa|limitations|words|sentence|originalText|lesson|sentences|dialogues|exchanges|card|reply|correction|improved|kind|title|speaker|explanationChinese|original)$/.test(p))}));
-      console.warn(JSON.stringify({event:'ai_validation',name,fields:fields??[],category:error instanceof Error&&error.message.includes('word order')?'word_order':'schema_or_pronunciation'}));
+      const message=error instanceof Error?error.message:'';
+      const category=message.includes('Japanese kana')?'non_chinese_phonetics':message.includes('repeats the translation')?'translated_phonetics':message.includes('count mismatch')?'lesson_count':message.includes('Missing correction')?'correction_mismatch':message.includes('word order')?'word_order':'schema_or_pronunciation';
+      console.warn(JSON.stringify({event:'ai_validation',name,fields:fields??[],category}));
+      if(bolt&&!repair&&!signal.aborted){
+        const feedback=category==='non_chinese_phonetics'?'Use ONLY Chinese Han characters for soundAlike, never Japanese kana.':category==='translated_phonetics'?'soundAlike MUST imitate the English sound using Chinese characters, NEVER repeat the Chinese meaning.':category==='lesson_count'?'Return exactly the requested number of sentences and dialogues.':category==='correction_mismatch'?'correction.original MUST equal the most recent user message exactly, preserving punctuation and spaces.':'Match every field, ordered token, type and count in the JSON schema exactly.';
+        const revised=messages.map((m,i)=>i===0&&m.role==='system'?{...m,content:m.content+'\nREPAIR REQUIRED: The previous attempt was rejected. '+feedback}:m);
+        return structuredModel(name,schema,revised,validate,{signal});
+      }
       throw new ApiError(502,'The AI response fields could not be validated. Please try again.');
     }
   } catch (error) {
