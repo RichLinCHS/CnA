@@ -13,6 +13,8 @@ export async function structuredModel<T>(name: string, schema: object, messages:
     const configuredModel = process.env.OPENAI_MODEL?.trim();
     const model = nvidia && (!configuredModel || configuredModel === 'nemotron-3-super-120b-a12b')
       ? 'nvidia/nemotron-3-super-120b-a12b' : configuredModel || 'gpt-4o-mini';
+    const bolt = nvidia && model === 'nvidia/nemotron-3.5-bolt-e4b';
+    const modelMessages = bolt ? messages.map((message,i)=>i===0&&message.role==='system'?{...message,content:message.content+'\nOUTPUT CONTRACT: Return exactly one JSON object matching this schema. No prose or markdown fences.\n'+JSON.stringify(providerSchema)}:message) : messages;
     if (url.protocol !== 'https:' && !(process.env.NODE_ENV !== 'production' && ['localhost', '127.0.0.1'].includes(url.hostname))) throw new ApiError(503, 'AI provider configuration is unavailable.');
     // One deadline covers fetch, body parsing and any quick transient retry.
     // Never restart a slow generation after dividing the deadline into attempts.
@@ -24,7 +26,7 @@ export async function structuredModel<T>(name: string, schema: object, messages:
     response = await fetch(url, {
       method: 'POST', cache: 'no-store', signal,
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-      body: JSON.stringify({ model, ...(nvidia ? { max_tokens: 12000 } : { max_completion_tokens: 12000 }), ...(nvidia && model === 'nvidia/nemotron-3-super-120b-a12b' ? { reasoning_effort: 'none' } : {}), stream: false, messages, response_format: { type: 'json_schema', json_schema: { name, strict: true, schema: providerSchema } } }),
+      body: JSON.stringify({ model, ...(nvidia ? { max_tokens: 12000 } : { max_completion_tokens: 12000 }), ...(nvidia && model === 'nvidia/nemotron-3-super-120b-a12b' ? { reasoning_effort: 'none' } : {}), ...(bolt ? {chat_template_kwargs:{enable_thinking:false}} : {}), stream: false, messages: modelMessages, response_format: { type: 'json_schema', json_schema: { name, strict: true, schema: providerSchema } } }),
     });
     if (![502,503,504].includes(response.status) || Date.now()-started>5000 || attempt+1>=attempts) break;
     await response.body?.cancel();
@@ -46,7 +48,17 @@ export async function structuredModel<T>(name: string, schema: object, messages:
     }
     const envelope = await response.json(); const choice = envelope.choices?.[0];
     if (choice?.finish_reason !== 'stop' || choice.message?.refusal || typeof choice.message?.content !== 'string') throw new ApiError(502, 'The AI returned an incomplete response. Please try again.');
-    return validate(JSON.parse(choice.message.content));
+    const content=choice.message.content.trim();
+    // Accept a single fenced JSON document, but never extract JSON from arbitrary prose.
+    const fenced=content.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+    let parsed:unknown;
+    try { parsed=JSON.parse(fenced?fenced[1]:content); } catch {throw new ApiError(502,'The AI returned invalid JSON. Please try again.');}
+    try {return validate(parsed);} catch(error) {
+      const issues=(error as {issues?:{code:string;path:(string|number)[]}[]})?.issues;
+      const fields=issues?.slice(0,5).map(issue=>({code:issue.code,path:issue.path.filter(p=>typeof p==='number'||/^(english|soundAlike|translation|ipa|limitations|words|sentence|originalText|lesson|sentences|dialogues|exchanges|card|reply|correction|improved|kind|title|speaker|explanationChinese|original)$/.test(p))}));
+      console.warn(JSON.stringify({event:'ai_validation',name,fields:fields??[],category:error instanceof Error&&error.message.includes('word order')?'word_order':'schema_or_pronunciation'}));
+      throw new ApiError(502,'The AI response fields could not be validated. Please try again.');
+    }
   } catch (error) {
     if (error instanceof ApiError) throw error;
     if (error instanceof Error && ['AbortError', 'TimeoutError'].includes(error.name)) throw new ApiError(504, 'Generation timed out. Please try again.');
