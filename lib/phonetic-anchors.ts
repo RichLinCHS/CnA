@@ -5,12 +5,16 @@ const referenceIpa:Record<string,string>={i:'aɪ',"haven't":'ˈhævənt',"hasn't
 export function anchorCard(card:Card):Card {
  const words=tokens(card.english).map(w=>w.toLowerCase().replaceAll('’',"'"));
  if(!words.length)return card;
+ // A spelling alone cannot establish pronunciation (weak forms, accents and context).
+ // Never overwrite the provider's IPA with a word-by-word dictionary transcription.
+ const normalizeIpa=(value:string)=>value.replace(/[\/ˈˌː\s.]/g,'').replaceAll('ɡ','g');
+ if(words.every(w=>referenceIpa[w]) && normalizeIpa(card.ipa)!==normalizeIpa(words.map(w=>referenceIpa[w]).join(' ')))return card;
  const groups=card.soundAlike.trim().split(/\s+/);
  const allKnown=words.every(w=>anchors[w]);
  // Only replace partial sentences when the provider preserved one group per word.
  if(!allKnown&&(groups.length!==words.length||!words.some(w=>anchors[w])))return card;
  const soundAlike=words.map((w,i)=>anchors[w]??groups[i]).join(' ');
- const ipa=words.every(w=>referenceIpa[w])?'/'+words.map(w=>referenceIpa[w]).join(' ')+'/':card.ipa;
+ const ipa=card.ipa;
  const notes=words.some(w=>["haven't",'have'].includes(w))?['have /hæv/ 和 haven’t /ˈhævənt/ 的 /æ/ 不是汉语的“哈”；/v/ 要上齿轻触下唇送气。词尾 /t/ 不要读成完整的“特”。']:[];
  if(words.includes('eaten'))notes.push('eaten /ˈiːtən/ 有两个音节，重音在前；“伊吞”仅为记忆提示，后半部分要轻短，不要读成中文“吃”。');
  return {...card,soundAlike,ipa,limitations:[...new Set([...notes,...(allKnown?[]:card.limitations),'汉字是近似记忆提示，不能准确表示英语元音和词尾辅音；不要把每个汉字都读成完整音节，请跟读英语音频。'])].slice(0,8)};
